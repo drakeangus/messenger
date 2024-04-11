@@ -6,7 +6,10 @@ import json
 import threading
 import time
 import sys
+# for the api requests
 from api_helpers import apirequests as api
+# for notifications
+from windows_toasts import Toast, WindowsToaster
 
 print("[DEBUG] - Starting")
 
@@ -20,6 +23,14 @@ class App(customtkinter.CTk):
 
     local_sequence_number=0
     ScheduledEventsControl=False
+
+    
+    def base_notification(self, text):
+        toaster = WindowsToaster('Python')
+        newToast = Toast()
+        newToast.text_fields = [f'{text} : New message!']
+        newToast.on_activated = lambda _: print('Toast clicked!')
+        toaster.show_toast(newToast)
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -146,8 +157,9 @@ class App(customtkinter.CTk):
         remote_sequence_number = api.get_remote_sequence_number()
         if remote_sequence_number > local_sequence_number:
             print("THERE ARE UNREAD MESSAGES")
-            
+            self.base_notification(username)
             new_messages = api.get_messages_in_range(local_sequence_number+1, remote_sequence_number)
+
             self.message_box.configure(state="normal")
             for message_data in new_messages:
                 self.message_box.insert("end", f'{message_data["user_id"]} : {message_data["message_text"]}\n')
@@ -190,7 +202,7 @@ class App(customtkinter.CTk):
         
         self.input_box.delete(0, 'end') # clear input box
 
-        user_id = 0
+        user_id = username
         api.send_new_message(user_id, message)
             
    
