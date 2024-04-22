@@ -14,7 +14,7 @@ To Do:
 [ ] Usernames
 
 [x] Notification
-
+    [ ] -> remove full paths in notification module
 [ ] Chimes
 
 
