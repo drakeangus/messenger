@@ -48,6 +48,7 @@ def AddNewMessage(user_id, message, sequence_number=0):
 def FindSequenceNumber():
     global current_sequence_number
     collection = db["Messages"]
+    current_sequence_number=0
     #all_documents = list(collection.find({},{'_id':False}))
     all_messages = list(collection.find({},{"sequence_number": True}))
     for data in all_messages:

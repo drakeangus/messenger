@@ -6,12 +6,17 @@ import json
 import threading
 import time
 import sys
+
+# for small functions
+from utils import utils
 # for the api requests
 from api_helpers import apirequests as api
 # for notifications
-from windows_toasts import Toast, WindowsToaster
+from notifications import notification_handler as notify
 
 print("[DEBUG] - Starting")
+
+
 
 customtkinter.set_appearance_mode("dark")
 
@@ -21,16 +26,15 @@ class App(customtkinter.CTk):
 
     corner_rad = 10
 
-    local_sequence_number=0
-    ScheduledEventsControl=False
+    notification_time_out=5 #seconds
 
+    ScheduledEventsControl=False
+    local_sequence_number=0 # this is the sequence number of the last message the app recieved from the database
+    last_notification_time=utils.EpocTime()  # time since epoc in seconds
+    last_sending_time=utils.EpocTimeMs()
     
-    def base_notification(self, text):
-        toaster = WindowsToaster('Python')
-        newToast = Toast()
-        newToast.text_fields = [f'{text} : New message!']
-        newToast.on_activated = lambda _: print('Toast clicked!')
-        toaster.show_toast(newToast)
+    print(f"Login time (epoc) : {last_notification_time}")
+
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -46,6 +50,7 @@ class App(customtkinter.CTk):
         self.login_label.pack(pady=12, padx=10)
         
         self.username_entry = customtkinter.CTkEntry(self.login_frame, width=200, placeholder_text="Username")
+        self.username_entry.bind('<Return>', self.login_event)
         self.username_entry.pack(pady=12, padx=10)
         
         self.password_entry = customtkinter.CTkEntry(self.login_frame, width=200, show="*", placeholder_text="Password")
@@ -107,7 +112,7 @@ class App(customtkinter.CTk):
        
     
 
-    def login_event(self):
+    def login_event(self, *args):
         global username
         global ScheduledEventsControl
         username=self.username_entry.get()
@@ -135,8 +140,10 @@ class App(customtkinter.CTk):
     def populate_message_history(self):
         global local_sequence_number
         all_messages=api.get_all_messages()
+        if len(all_messages) == 0:
+            print("No messages")
+            return
         self.message_box.configure(state="normal")
-        self.message_box.insert("end", "Unread messages : \n")
         for message_data in all_messages:
             self.message_box.insert("end", f'{message_data["user_id"]} : {message_data["message_text"]}\n')
             local_sequence_number = message_data['sequence_number']
@@ -157,7 +164,7 @@ class App(customtkinter.CTk):
         remote_sequence_number = api.get_remote_sequence_number()
         if remote_sequence_number > local_sequence_number:
             print("THERE ARE UNREAD MESSAGES")
-            self.base_notification(username)
+            
             new_messages = api.get_messages_in_range(local_sequence_number+1, remote_sequence_number)
 
             self.message_box.configure(state="normal")
@@ -166,6 +173,15 @@ class App(customtkinter.CTk):
                 local_sequence_number = message_data['sequence_number']
             self.message_box.configure(state="disabled")
             self.message_box.see("end")
+            self.NewMessageAlert(message_data["user_id"], message_data["message_text"])
+    
+    def NewMessageAlert(self, sender, message_text):
+        if sender == username:
+            return     
+        if utils.EpocTime() < self.last_notification_time + self.notification_time_out:
+            return               
+        notify.NewMessage(sender, message_text)
+        self.last_notification_time = utils.EpocTime()
 
     def ScheduledEvent(self):
         if ScheduledEventsControl == False:
@@ -186,24 +202,26 @@ class App(customtkinter.CTk):
             ScheduledEventsControl=True
             self.ScheduledEvent()
 
-
-       
+   
     def publish_message(self, sender, message):
         self.message_box.configure(state="normal")
         self.message_box.insert("end", f"{sender} : {message}\n")
         self.message_box.configure(state="disabled") # text box should be read-only after a message is published
         self.message_box.see("end")
-
-   
+        
 
     def send_event(self, *args):
         message=self.input_box.get()
-        print(f"Message sending: {username} - {message}")
+        if message == "":
+            return
+        if utils.EpocTimeMs() < self.last_sending_time + 0.5:
+            return
         
+        print(f"Message sending: {username} - {message}")       
         self.input_box.delete(0, 'end') # clear input box
-
         user_id = username
         api.send_new_message(user_id, message)
+        self.last_sending_time = utils.EpocTimeMs()
             
    
             
